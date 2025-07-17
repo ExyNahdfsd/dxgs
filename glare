@@ -1,0 +1,97 @@
+local TeamColor = {
+    Ally = {
+        Fill = Color3.fromRGB(100, 150, 255),
+        Outline = Color3.fromRGB(0, 100, 255)
+    },
+    Enemy = {
+        Fill = Color3.fromRGB(255, 50, 50),
+        Outline = Color3.fromRGB(255, 0, 0)
+    }
+}
+
+local DepthMode = "AlwaysOnTop"
+local FillTransparency = 0.5
+local OutlineTransparency = 0
+
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+local connections = {}
+
+local Storage = Instance.new("Folder")
+Storage.Parent = CoreGui
+Storage.Name = "PermanentChamsStorage"
+
+local function getTeamColor(plr)
+    if not lp.Team or not plr.Team or plr.Team == lp.Team then
+        return TeamColor.Ally
+    else
+        return TeamColor.Enemy
+    end
+end
+
+local function ApplyPermanentChams(plr)
+    if plr == lp then return end
+    
+    local Highlight = Instance.new("Highlight")
+    Highlight.Name = plr.Name
+    Highlight.DepthMode = DepthMode
+    Highlight.FillTransparency = FillTransparency
+    Highlight.OutlineTransparency = OutlineTransparency
+    Highlight.Parent = Storage
+
+    local function UpdateColors()
+        local teamColors = getTeamColor(plr)
+        Highlight.FillColor = teamColors.Fill
+        Highlight.OutlineColor = teamColors.Outline
+    end
+
+    local function TrackCharacter(char)
+        if not char then return end
+        
+        Highlight.Adornee = char
+        
+        local conn
+        conn = RunService.Heartbeat:Connect(function()
+            if not char or not char.Parent then
+                local newChar = plr.Character or plr.CharacterAdded:Wait()
+                char = newChar
+                Highlight.Adornee = char
+            else
+                Highlight.Adornee = char
+            end
+        end)
+        
+        table.insert(connections[plr], conn)
+    end
+
+    UpdateColors()
+    connections[plr] = {}
+    
+    table.insert(connections[plr], plr.CharacterAdded:Connect(TrackCharacter))
+    table.insert(connections[plr], plr:GetPropertyChangedSignal("Team"):Connect(UpdateColors))
+
+    if plr.Character then
+        TrackCharacter(plr.Character)
+    end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    task.spawn(ApplyPermanentChams, plr)
+end
+
+Players.PlayerAdded:Connect(function(plr)
+    task.spawn(ApplyPermanentChams, plr)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if Storage[plr.Name] then
+        Storage[plr.Name]:Destroy()
+    end
+    if connections[plr] then
+        for _, conn in ipairs(connections[plr]) do
+            conn:Disconnect()
+        end
+    end
+end)
